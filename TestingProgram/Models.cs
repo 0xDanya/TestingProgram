@@ -2,9 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 
 namespace TestingProgram
 {
@@ -65,5 +63,45 @@ namespace TestingProgram
         public DateTime? EndTime { get; set; }
         public bool IsCompleted => EndTime.HasValue;
     }
-}
 
+    public class TestingDbContext : DbContext
+    {
+        public TestingDbContext(DbContextOptions<TestingDbContext> options)
+        : base(options)
+        {
+        }
+
+        public DbSet<User> Users { get; set; }
+        public DbSet<Question> Questions { get; set; }
+        public DbSet<Test> Tests { get; set; }
+        public DbSet<TestSession> TestSessions { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.TestSessions)
+                .WithOne(ts => ts.User)
+                .HasForeignKey(ts => ts.UserId);
+
+            modelBuilder.Entity<Question>()
+                .HasOne(q => q.Test)
+                .WithMany(t => t.Questions)
+                .HasForeignKey(q => q.TestId);
+
+            modelBuilder.Entity<Test>()
+                .HasOne(t => t.Author)
+                .WithMany()
+                .HasForeignKey(t => t.AuthorId);
+
+            modelBuilder.Entity<TestSession>()
+                .HasOne(ts => ts.User)
+                .WithMany(u => u.TestSessions)
+                .HasForeignKey(ts => ts.UserId);
+
+            modelBuilder.Entity<TestSession>()
+                .HasOne(ts => ts.Test)
+                .WithMany()
+                .HasForeignKey(ts => ts.TestId);
+        }
+    }
+}
