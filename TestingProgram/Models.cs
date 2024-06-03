@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Data.SqlClient;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TestingProgram
 {
@@ -23,12 +24,21 @@ namespace TestingProgram
         [Key]
         public int QuestionId { get; set; }
         public string Text { get; set; }
-        public List<string> Options { get; set; }
-        public List<int> CorrectAnswers { get; set; }
+        public List<Answer> Options { get; set; }
         public int Weight { get; set; }
         public QuestionType Type { get; set; }
         public int TestId { get; set; }
         public Test Test { get; set; }
+    }
+
+    public class Answer
+    {
+        [Key]
+        public int AnswerId { get; set; }
+        public string Text { get; set; }
+        public bool IsCorrect { get; set; }
+        public int QuestionId { get; set; }
+        public Question Question { get; set; }
     }
 
     public enum QuestionType
@@ -47,6 +57,7 @@ namespace TestingProgram
         public int AuthorId { get; set; }
         public User Author { get; set; }
         public DateTime CreationDate { get; set; }
+        public List<TestSession> TestSessions { get; set; } 
     }
 
     public class TestSession
@@ -57,7 +68,7 @@ namespace TestingProgram
         public User User { get; set; }
         public int TestId { get; set; }
         public Test Test { get; set; }
-        public Dictionary<int, List<int>> Answers { get; set; }
+        public List<Question> Questions { get; set; }
         public int? Score { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime? EndTime { get; set; }
@@ -66,10 +77,15 @@ namespace TestingProgram
 
     public class TestingDbContext : DbContext
     {
+        public TestingDbContext() : base() { try { Database.EnsureCreated(); } catch (Exception ex) { Console.WriteLine(ex); } }
         public TestingDbContext(DbContextOptions<TestingDbContext> options)
         : base(options)
         {
         }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        => optionsBuilder.UseSqlServer
+        ("data source=(localdb)\\MSSQLLocalDB;initial catalog=TestingDB;integrated security=True;MultipleActiveResultSets=true");
 
         public DbSet<User> Users { get; set; }
         public DbSet<Question> Questions { get; set; }
@@ -78,30 +94,26 @@ namespace TestingProgram
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<User>()
-                .HasMany(u => u.TestSessions)
-                .WithOne(ts => ts.User)
-                .HasForeignKey(ts => ts.UserId);
+            base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<Question>()
-                .HasOne(q => q.Test)
-                .WithMany(t => t.Questions)
-                .HasForeignKey(q => q.TestId);
+            modelBuilder.Entity<User>()
+            .HasMany(u => u.TestSessions)
+            .WithOne(ts => ts.User)
+            .HasForeignKey(ts => ts.UserId)
+            .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<Test>()
-                .HasOne(t => t.Author)
-                .WithMany()
-                .HasForeignKey(t => t.AuthorId);
-
+                .HasMany(t => t.Questions).WithOne(q => q.Test);
+            modelBuilder.Entity<Test>()
+                .HasMany(t => t.TestSessions).WithOne(ts => ts.Test);
             modelBuilder.Entity<TestSession>()
-                .HasOne(ts => ts.User)
-                .WithMany(u => u.TestSessions)
-                .HasForeignKey(ts => ts.UserId);
-
-            modelBuilder.Entity<TestSession>()
-                .HasOne(ts => ts.Test)
-                .WithMany()
-                .HasForeignKey(ts => ts.TestId);
+                .HasMany(ts => ts.Questions);
+            modelBuilder.Entity<Question>()
+                .HasMany(q => q.Options).WithOne(a => a.Question);
+            modelBuilder.Entity<Question>()
+                .Property(q => q.Type).HasConversion(
+                v => v.ToString(),
+                v => (QuestionType)Enum.Parse(typeof(QuestionType), v));
         }
     }
 }
