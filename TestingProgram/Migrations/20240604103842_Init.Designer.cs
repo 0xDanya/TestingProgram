@@ -12,7 +12,7 @@ using TestingProgram;
 namespace TestingProgram.Migrations
 {
     [DbContext(typeof(TestingDbContext))]
-    [Migration("20240603144749_Init")]
+    [Migration("20240604103842_Init")]
     partial class Init
     {
         /// <inheritdoc />
@@ -47,7 +47,7 @@ namespace TestingProgram.Migrations
 
                     b.HasIndex("QuestionId");
 
-                    b.ToTable("Answer");
+                    b.ToTable("Answers");
                 });
 
             modelBuilder.Entity("TestingProgram.Question", b =>

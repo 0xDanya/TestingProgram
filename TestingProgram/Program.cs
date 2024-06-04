@@ -269,7 +269,7 @@ internal class Program
         WriteLine("Enter your question description: ");
         string description = ReadLine();
         Question question = new Question();
-        question.Options = new List<Answer>();
+        var answ = new List<Answer>();
         question.Text = description;
         while (true)
         {
@@ -286,14 +286,15 @@ internal class Program
             if (isCorr == 'Y' || isCorr == 'y')
             {
                 the_answer.IsCorrect = true;
-                question.Options.Add(the_answer);
             }
 
             else
             {
                 the_answer.IsCorrect = false;
-                question.Options.Add(the_answer);
             }
+            question.Options.Add(the_answer);
+            answ.Add(the_answer);
+            context.Answers.Add(the_answer);
             if (question.Options.Count > 1)
                 question.Type = QuestionType.MultipleChoice;
             else
@@ -308,6 +309,8 @@ internal class Program
         WriteLine("Enter weight (count of marks) of your question: ");
         int.TryParse(ReadLine(), out int mark);
         question.Weight = mark;
+        question.Options = answ;
+        
     }
 
     static void EditQuestion(TestingDbContext context, ref Test test)
@@ -543,7 +546,6 @@ internal class Program
         {
             WriteLine($"Test: {session.Test.Name}, Score: {session.Score}, Completed: {session.EndTime}");
         }
-
         ReadLine();
     }
 }

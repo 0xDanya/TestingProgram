@@ -90,6 +90,7 @@ namespace TestingProgram
         public DbSet<User> Users { get; set; }
         public DbSet<Question> Questions { get; set; }
         public DbSet<Test> Tests { get; set; }
+        public DbSet<Answer> Answers { get; set; }
         public DbSet<TestSession> TestSessions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -114,6 +115,11 @@ namespace TestingProgram
                 .Property(q => q.Type).HasConversion(
                 v => v.ToString(),
                 v => (QuestionType)Enum.Parse(typeof(QuestionType), v));
+            modelBuilder.Entity<Answer>()
+                .HasOne(a => a.Question)
+                .WithMany(q => q.Options)
+                .HasForeignKey(a => a.QuestionId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

@@ -44,7 +44,7 @@ namespace TestingProgram.Migrations
 
                     b.HasIndex("QuestionId");
 
-                    b.ToTable("Answer");
+                    b.ToTable("Answers");
                 });
 
             modelBuilder.Entity("TestingProgram.Question", b =>
