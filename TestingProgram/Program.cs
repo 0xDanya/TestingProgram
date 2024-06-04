@@ -34,19 +34,20 @@ internal class Program
                         break;
                     default:
                         WriteLine("Invalid choice. Try again.");
+                        ReadLine();
                         break;
                 }
             }
         }
     }
 
-    static void Register(TestingDbContext context)
+    private static void Register(TestingDbContext context)
     {
         Clear();
-        WriteLine("Register a new account");
-        Write("Enter username: ");
+        WriteLine("Register a new user");
+        Write("Username: ");
         string username = ReadLine();
-        Write("Enter password: ");
+        Write("Password: ");
         string password = ReadLine();
 
         var user = new User
@@ -54,55 +55,99 @@ internal class Program
             Username = username,
             Password = password,
             RegistrationDate = DateTime.Now,
+            IsAdmin = false,
             AttemptsLimit = 3,
-            IsAdmin = false
+            TestSessions = new List<TestSession>()
         };
 
         context.Users.Add(user);
         context.SaveChanges();
 
-        WriteLine("Registration successful!");
+        WriteLine("User registered successfully!");
         ReadLine();
     }
 
-    static void Login(TestingDbContext context)
+    private static void Login(TestingDbContext context)
     {
         Clear();
-        WriteLine("Login to your account");
-        Write("Enter username: ");
+        WriteLine("Login");
+        Write("Username: ");
         string username = ReadLine();
-        Write("Enter password: ");
+        Write("Password: ");
         string password = ReadLine();
 
         var user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
-        if (user != null)
-        {
-            WriteLine("Login successful!");
-            if (user.IsAdmin)
-            {
-                AdminMenu(context, user);
-            }
-            else
-            {
-                UserMenu(context, user);
-            }
-        }
-        else
+        if (user == null)
         {
             WriteLine("Invalid username or password.");
             ReadLine();
+            return;
+        }
+
+        if (user.IsAdmin)
+        {
+            AdminMenu(context, user);
+        }
+        else
+        {
+            UserMenu(context, user);
         }
     }
 
-    static void UserMenu(TestingDbContext context, User user)
+    private static void AdminMenu(TestingDbContext context, User admin)
     {
-        bool logout = false;
+        bool exit = false;
 
-        while (!logout)
+        while (!exit)
+        {
+            Clear();
+            WriteLine($"Welcome, {admin.Username} (Admin)");
+            WriteLine("1. Create Test");
+            WriteLine("2. Edit Test");
+            WriteLine("3. Delete Test");
+            WriteLine("4. View Results");
+            WriteLine("5. Logout");
+            Write("Choose an option: ");
+            string choice = ReadLine();
+
+            switch (choice)
+            {
+                case "1":
+                    CreateTest(context, admin);
+                    break;
+                case "2":
+                    Write("Enter test ID to edit: ");
+                    int editTestId = int.Parse(ReadLine());
+                    EditTest(context, editTestId);
+                    break;
+                case "3":
+                    Write("Enter test ID to delete: ");
+                    int deleteTestId = int.Parse(ReadLine());
+                    DeleteTest(context, deleteTestId);
+                    break;
+                case "4":
+                    ViewResults(context, admin);
+                    break;
+                case "5":
+                    exit = true;
+                    break;
+                default:
+                    WriteLine("Invalid choice. Try again.");
+                    ReadLine();
+                    break;
+            }
+        }
+    }
+
+    private static void UserMenu(TestingDbContext context, User user)
+    {
+        bool exit = false;
+
+        while (!exit)
         {
             Clear();
             WriteLine($"Welcome, {user.Username}");
-            WriteLine("1. Take a Test");
+            WriteLine("1. Take Test");
             WriteLine("2. View Results");
             WriteLine("3. Logout");
             Write("Choose an option: ");
@@ -117,46 +162,11 @@ internal class Program
                     ViewResults(context, user);
                     break;
                 case "3":
-                    logout = true;
+                    exit = true;
                     break;
                 default:
                     WriteLine("Invalid choice. Try again.");
-                    break;
-            }
-        }
-    }
-
-    static void AdminMenu(TestingDbContext context, User admin)
-    {
-        bool logout = false;
-
-        while (!logout)
-        {
-            Clear();
-            WriteLine($"Welcome, Admin {admin.Username}");
-            WriteLine("1. Create Test");
-            WriteLine("2. Edit Test");
-            WriteLine("3. Delete Test");
-            WriteLine("4. Logout");
-            Write("Choose an option: ");
-            string choice = ReadLine();
-
-            switch (choice)
-            {
-                case "1":
-                    CreateTest(context, admin);
-                    break;
-                case "2":
-                    EditTest(context);
-                    break;
-                case "3":
-                    DeleteTest(context);
-                    break;
-                case "4":
-                    logout = true;
-                    break;
-                default:
-                    WriteLine("Invalid choice. Try again.");
+                    ReadLine();
                     break;
             }
         }
@@ -172,25 +182,11 @@ internal class Program
         {
             Name = testName,
             AuthorId = admin.UserId,
-            Author = admin,
             CreationDate = DateTime.Now,
             IsPublished = false,
             Questions = new List<Question>()
         };
 
-
-        while (true)
-        {
-            AddQuestion(context, ref test);
-            WriteLine("Press [C] To continue adding questions" +
-                          "\nPress any other key to stop adding answers");
-            if (ReadKey().Key != ConsoleKey.C)
-            {
-                break;
-            }
-        }
-
-        test.IsPublished = true;
         context.Tests.Add(test);
         context.SaveChanges();
 
@@ -198,265 +194,147 @@ internal class Program
         EditTest(context, test.TestId);
     }
 
-    static void EditTest(TestingDbContext context, int? testId = null)
+    static void EditTest(TestingDbContext context, int testId)
     {
-        if (testId == null)
-        {
-            Clear();
-            var tests = context.Tests.ToList();
-            if (!tests.Any())
-            {
-                WriteLine("No tests available to edit.");
-                ReadLine();
-                return;
-            }
+        var test = context.Tests.Include(t => t.Questions).ThenInclude(q => q.Options).SingleOrDefault(t => t.TestId == testId);
 
-            WriteLine("Available Tests:");
-            foreach (var test in tests)
-            {
-                WriteLine($"{test.TestId}. {test.Name}");
-            }
-
-            Write("Enter test ID to edit: ");
-            testId = int.Parse(ReadLine());
-        }
-
-        var selectedTest = context.Tests.Include(t => t.Questions).SingleOrDefault(t => t.TestId == testId);
-
-        if (selectedTest == null)
+        if (test == null)
         {
             WriteLine("Test not found.");
             ReadLine();
             return;
         }
 
-        bool done = false;
-        while (!done)
+        while (true)
         {
             Clear();
-            WriteLine($"Editing Test: {selectedTest.Name}");
+            WriteLine($"Editing Test: {test.Name}");
             WriteLine("1. Add Question");
-            WriteLine("2. Edit Question");
-            WriteLine("3. Delete Question");
-            WriteLine("4. Done");
+            WriteLine("2. Remove Question");
+            WriteLine("3. Publish Test");
+            WriteLine("4. Save and Exit");
             Write("Choose an option: ");
-            string choice = ReadLine();
+            int choice = int.Parse(ReadLine());
 
             switch (choice)
             {
-                case "1":
-                    AddQuestion(context, ref selectedTest);
+                case 1:
+                    AddQuestion(context, test);
                     break;
-                case "2":
-                    EditQuestion(context, ref selectedTest);
+                case 2:
+                    RemoveQuestion(context, test);
                     break;
-                case "3":
-                    DeleteQuestion(context, ref selectedTest);
-                    break;
-                case "4":
-                    done = true;
-                    break;
+                case 3:
+                    test.IsPublished = true;
+                    context.SaveChanges();
+                    WriteLine("Test published successfully!");
+                    ReadLine();
+                    return;
+                case 4:
+                    context.SaveChanges();
+                    return;
                 default:
-                    WriteLine("Invalid choice. Try again.");
+                    WriteLine("Invalid choice.");
+                    ReadLine();
                     break;
             }
         }
     }
 
-    static void AddQuestion(TestingDbContext context, ref Test test)
+    static void AddQuestion(TestingDbContext context, Test test)
     {
         Clear();
-        WriteLine("Enter your question description: ");
-        string description = ReadLine();
-        Question question = new Question();
-        var answ = new List<Answer>();
-        question.Text = description;
-        while (true)
+        Write("Enter question text: ");
+        string questionText = ReadLine();
+
+        Write("Enter question weight: ");
+        int weight = int.Parse(ReadLine());
+
+        Write("Enter question type (1: SingleChoice, 2: MultipleChoice): ");
+        int questionTypeInt = int.Parse(ReadLine());
+        QuestionType questionType = questionTypeInt == 1 ? QuestionType.SingleChoice : QuestionType.MultipleChoice;
+
+        var question = new Question
         {
-            Answer the_answer = new Answer();
-            WriteLine("Enter description of answer for the question: ");
-            string op = ReadLine();
-            the_answer.Question = question;
-            the_answer.Text = op;
-            WriteLine("Is that correct answer?" +
-                      "\n[Y] Yes " +
-                      "\n[Any other key] No");
-            char.TryParse(Console.ReadLine(), out char isCorr);
+            Text = questionText,
+            Weight = weight,
+            Type = questionType,
+            TestId = test.TestId,
+            Options = new List<Answer>()
+        };
 
-            if (isCorr == 'Y' || isCorr == 'y')
-            {
-                the_answer.IsCorrect = true;
-            }
+        Write("Enter number of options: ");
+        int optionCount = int.Parse(ReadLine());
 
-            else
+        for (int i = 0; i < optionCount; i++)
+        {
+            Write($"Enter option {i + 1} text: ");
+            string optionText = ReadLine();
+
+            Write($"Is option {i + 1} correct? (y/n): ");
+            bool isCorrect = ReadLine().ToLower() == "y";
+
+            question.Options.Add(new Answer
             {
-                the_answer.IsCorrect = false;
-            }
-            question.Options.Add(the_answer);
-            answ.Add(the_answer);
-            context.Answers.Add(the_answer);
-            if (question.Options.Count > 1)
-                question.Type = QuestionType.MultipleChoice;
-            else
-                question.Type = QuestionType.SingleChoice;
-            WriteLine("Press [C] To continue adding options" +
-                      "\nPress any other key to stop adding answers");
-            if (ReadKey().Key != ConsoleKey.C)
-            {
-                break;
-            }
+                Text = optionText,
+                IsCorrect = isCorrect,
+                Question = question
+            });
         }
-        WriteLine("Enter weight (count of marks) of your question: ");
-        int.TryParse(ReadLine(), out int mark);
-        question.Weight = mark;
-        question.Options = answ;
-        
+
+        test.Questions.Add(question);
+        context.SaveChanges();
     }
 
-    static void EditQuestion(TestingDbContext context, ref Test test)
+    static void RemoveQuestion(TestingDbContext context, Test test)
     {
         Clear();
-        if (!test.Questions.Any())
-        {
-            WriteLine("No questions available to edit.");
-            ReadLine();
-            return;
-        }
-
-        WriteLine("Available Questions:");
+        WriteLine("Questions:");
         foreach (var question in test.Questions)
         {
             WriteLine($"{question.QuestionId}. {question.Text}");
         }
 
-        Write("Enter question ID to edit: ");
+        Write("Enter question ID to remove: ");
         int questionId = int.Parse(ReadLine());
+        var questionToRemove = context.Questions.Include(q => q.Options).SingleOrDefault(q => q.QuestionId == questionId);
 
-        var selectedQuestion = test.Questions.SingleOrDefault(q => q.QuestionId == questionId);
-
-        if (selectedQuestion == null)
+        if (questionToRemove != null)
+        {
+            context.Questions.Remove(questionToRemove);
+            context.SaveChanges();
+            WriteLine("Question removed successfully!");
+        }
+        else
         {
             WriteLine("Question not found.");
-            ReadLine();
-            return;
         }
 
-        Write("Enter new question text: ");
-        selectedQuestion.Text = ReadLine();
-        while (true)
-        {
-            Answer the_answer = new Answer();
-            WriteLine("Enter description of answer for the question: ");
-            string op = ReadLine();
-            the_answer.Question = selectedQuestion;
-            the_answer.Text = op;
-            WriteLine("Is that correct answer?" +
-                      "\n[Y] Yes " +
-                      "\n[Any other key] No");
-            char.TryParse(Console.ReadLine(), out char isCorr);
-
-            if (isCorr == 'Y' || isCorr == 'y')
-            {
-                the_answer.IsCorrect = true;
-                selectedQuestion.Options.Add(the_answer);
-            }
-
-            else
-            {
-                the_answer.IsCorrect = false;
-                selectedQuestion.Options.Add(the_answer);
-            }
-            WriteLine("Press [C] To continue adding options" +
-                      "\nPress any other key to stop adding answers");
-            if (ReadKey().Key != ConsoleKey.C)
-            {
-                break;
-            }
-        }
-        WriteLine("Enter new question weight: ");
-        selectedQuestion.Weight = int.Parse(ReadLine());
-        WriteLine("Enter new question type (0 for SingleChoice, 1 for MultipleChoice): ");
-        selectedQuestion.Type = (QuestionType)int.Parse(ReadLine());
-
-        context.Questions.Update(selectedQuestion);
-        context.SaveChanges();
-
-        WriteLine("Question edited successfully!");
+        ReadLine();
     }
 
-    static void DeleteQuestion(TestingDbContext context, ref Test test)
+    static void DeleteTest(TestingDbContext context, int testId)
     {
-        Clear();
-        if (!test.Questions.Any())
-        {
-            WriteLine("No questions available to delete.");
-            ReadLine();
-            return;
-        }
+        var test = context.Tests.Include(t => t.Questions).ThenInclude(q => q.Options).SingleOrDefault(t => t.TestId == testId);
 
-        WriteLine("Available Questions:");
-        foreach (var question in test.Questions)
-        {
-            WriteLine($"{question.QuestionId}. {question.Text}");
-        }
-
-        Write("Enter question ID to delete: ");
-        int questionId = int.Parse(ReadLine());
-
-        var selectedQuestion = test.Questions.SingleOrDefault(q => q.QuestionId == questionId);
-
-        if (selectedQuestion == null)
-        {
-            WriteLine("Question not found.");
-            ReadLine();
-            return;
-        }
-
-        context.Questions.Remove(selectedQuestion);
-        context.SaveChanges();
-
-        WriteLine("Question deleted successfully!");
-    }
-
-    static void DeleteTest(TestingDbContext context)
-    {
-        Clear();
-        var tests = context.Tests.ToList();
-        if (!tests.Any())
-        {
-            WriteLine("No tests available to delete.");
-            ReadLine();
-            return;
-        }
-
-        WriteLine("Available Tests:");
-        foreach (var test in tests)
-        {
-            WriteLine($"{test.TestId}. {test.Name}");
-        }
-
-        Write("Enter test ID to delete: ");
-        int testId = int.Parse(ReadLine());
-
-        var selectedTest = context.Tests.Include(t => t.Questions).SingleOrDefault(t => t.TestId == testId);
-
-        if (selectedTest == null)
+        if (test == null)
         {
             WriteLine("Test not found.");
             ReadLine();
             return;
         }
 
-        context.Tests.Remove(selectedTest);
+        context.Tests.Remove(test);
         context.SaveChanges();
 
         WriteLine("Test deleted successfully!");
+        ReadLine();
     }
 
     static void TakeTest(TestingDbContext context, User user)
     {
         Clear();
-        var tests = context.Tests.Where(t => t.IsPublished).ToList();
+        var tests = context.Tests.Include(t => t.Questions).ThenInclude(q => q.Options).Where(t => t.IsPublished).ToList();
         if (!tests.Any())
         {
             WriteLine("No tests available.");
@@ -472,8 +350,7 @@ internal class Program
 
         Write("Enter test ID to take: ");
         int testId = int.Parse(ReadLine());
-
-        var selectedTest = context.Tests.Include(t => t.Questions).SingleOrDefault(t => t.TestId == testId);
+        var selectedTest = context.Tests.Include(t => t.Questions).ThenInclude(q => q.Options).SingleOrDefault(t => t.TestId == testId);
 
         if (selectedTest == null)
         {
@@ -482,70 +359,107 @@ internal class Program
             return;
         }
 
+        if (context.TestSessions.Count(ts => ts.UserId == user.UserId && ts.TestId == testId) >= user.AttemptsLimit)
+        {
+            WriteLine("You have reached the attempt limit for this test.");
+            ReadLine();
+            return;
+        }
+
         var testSession = new TestSession
         {
             UserId = user.UserId,
-            TestId = selectedTest.TestId,
+            TestId = testId,
             StartTime = DateTime.Now,
-            Questions = selectedTest.Questions,
-            Score = 0
+            Questions = selectedTest.Questions.ToList()
         };
-
-        foreach (var question in selectedTest.Questions)
-        {
-            Clear();
-            WriteLine($"Question: {question.Text}");
-            for (int i = 0; i < question.Options.Count; i++)
-            {
-                WriteLine($"{i}. {question.Options[i]}");
-            }
-
-            WriteLine("Enter your answers (comma separated): ");
-            var answers = ReadLine().Split(',').Select(int.Parse).ToList();
-            bool isCorrectAnswer = CheckAnswers(question, answers);
-            if (isCorrectAnswer)
-            {
-                testSession.Score += question.Weight;
-            }
-        }
-
-        testSession.EndTime = DateTime.Now;
 
         context.TestSessions.Add(testSession);
         context.SaveChanges();
 
-        WriteLine($"Test completed! Your score: {testSession.Score}");
+        var userAnswers = new Dictionary<int, List<int>>();
+
+        foreach (var question in selectedTest.Questions)
+        {
+            Clear();
+            WriteLine(question.Text);
+            for (int i = 0; i < question.Options.Count; i++)
+            {
+                WriteLine($"{i + 1}. {question.Options[i].Text}");
+            }
+
+            var answers = new List<int>();
+            if (question.Type == QuestionType.SingleChoice)
+            {
+                Write("Enter the number of the correct option: ");
+                answers.Add(int.Parse(ReadLine()) - 1);
+            }
+            else if (question.Type == QuestionType.MultipleChoice)
+            {
+                Write("Enter the numbers of the correct options separated by commas: ");
+                answers = ReadLine().Split(',').Select(s => int.Parse(s.Trim()) - 1).ToList();
+            }
+
+            userAnswers.Add(question.QuestionId, answers);
+        }
+
+        foreach (var answer in userAnswers)
+        {
+            foreach (var optionId in answer.Value)
+            {
+                var answerRecord = new Answer
+                {
+                    QuestionId = answer.Key,
+                    AnswerId = optionId
+                };
+                context.Answers.Add(answerRecord);
+            }
+        }
+
+        testSession.EndTime = DateTime.Now;
+        context.SaveChanges();
+
+        CalculateScore(context, testSession);
+
+        WriteLine("Test completed!");
         ReadLine();
     }
 
-    static bool CheckAnswers(Question question, List<int> answersNums)
+    static void CalculateScore(TestingDbContext context, TestSession testSession)
     {
-        foreach (var num in answersNums)
+        int totalScore = 0;
+        foreach (var question in testSession.Questions)
         {
-            if (question.Options[num].IsCorrect == false)
-                return false;
-            
+            var correctOptions = question.Options.Where(o => o.IsCorrect).Select(o => o.AnswerId).ToList();
+            var userOptions = context.Answers.Where(a => a.QuestionId == question.QuestionId && a.AnswerId == question.QuestionId).Select(a => a.AnswerId).ToList();
+
+            if (correctOptions.Count == userOptions.Count && !correctOptions.Except(userOptions).Any())
+            {
+                totalScore += question.Weight;
+            }
         }
-        return true;
+
+        testSession.Score = totalScore;
+        context.SaveChanges();
     }
 
     static void ViewResults(TestingDbContext context, User user)
     {
         Clear();
-        var sessions = context.TestSessions.Include(ts => ts.Test).Where(ts => ts.UserId == user.UserId).ToList();
-
+        var sessions = context.TestSessions.Include(ts => ts.Test).Where(ts => ts.UserId == user.UserId && ts.IsCompleted).ToList();
         if (!sessions.Any())
         {
-            WriteLine("No test sessions found.");
+            WriteLine("No completed test sessions found.");
             ReadLine();
             return;
         }
 
-        WriteLine("Your Test Sessions:");
+        WriteLine("Completed Test Sessions:");
         foreach (var session in sessions)
         {
             WriteLine($"Test: {session.Test.Name}, Score: {session.Score}, Completed: {session.EndTime}");
         }
+
         ReadLine();
     }
 }

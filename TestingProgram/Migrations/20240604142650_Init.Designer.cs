@@ -12,7 +12,7 @@ using TestingProgram;
 namespace TestingProgram.Migrations
 {
     [DbContext(typeof(TestingDbContext))]
-    [Migration("20240604103842_Init")]
+    [Migration("20240604142650_Init")]
     partial class Init
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace TestingProgram.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.5")
+                .HasAnnotation("ProductVersion", "8.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);

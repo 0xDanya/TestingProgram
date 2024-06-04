@@ -31,6 +31,7 @@ namespace TestingProgram
         public Test Test { get; set; }
     }
 
+    [Table("Answers")]
     public class Answer
     {
         [Key]
