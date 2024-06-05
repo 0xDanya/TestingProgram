@@ -24,7 +24,7 @@ internal class Program
                 switch (choice)
                 {
                     case "1":
-                        Register(context);
+                        Register(context, false);
                         break;
                     case "2":
                         Login(context);
@@ -41,7 +41,7 @@ internal class Program
         }
     }
 
-    private static void Register(TestingDbContext context)
+    private static void Register(TestingDbContext context, bool isAdmin)
     {
         Clear();
         WriteLine("Register a new user");
@@ -50,12 +50,21 @@ internal class Program
         Write("Password: ");
         string password = ReadLine();
 
+
+        User existingUser = context.Users.SingleOrDefault(u => u.Username == username);
+        if (existingUser != null)
+        {
+            WriteLine("A user with this username already exists. Please choose a different username.");
+            ReadLine();
+            return;
+        }
+
         var user = new User
         {
             Username = username,
             Password = password,
             RegistrationDate = DateTime.Now,
-            IsAdmin = false,
+            IsAdmin = isAdmin,
             AttemptsLimit = 3,
             TestSessions = new List<TestSession>()
         };
@@ -70,28 +79,31 @@ internal class Program
     private static void Login(TestingDbContext context)
     {
         Clear();
-        WriteLine("Login");
-        Write("Username: ");
-        string username = ReadLine();
-        Write("Password: ");
-        string password = ReadLine();
 
-        var user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
-        if (user == null)
-        {
-            WriteLine("Invalid username or password.");
-            ReadLine();
-            return;
-        }
+        //WriteLine("Login");
+        //Write("Username: ");
+        //string username = ReadLine();
+        //Write("Password: ");
+        //string password = ReadLine();
 
-        if (user.IsAdmin)
-        {
-            AdminMenu(context, user);
-        }
-        else
-        {
-            UserMenu(context, user);
-        }
+        //var user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
+        //if (user == null)
+        //{
+        //    WriteLine("Invalid username or password.");
+        //    ReadLine();
+        //    return;
+        //}
+
+        //if (user.IsAdmin)
+        //{
+        //    AdminMenu(context, user);
+        //}
+        //else
+        //{
+        //    UserMenu(context, user);
+        //}
+        var user = context.Users.SingleOrDefault(u => u.Username == "Junior" && u.Password == "12345");
+        UserMenu(context, user);
     }
 
     private static void AdminMenu(TestingDbContext context, User admin)
@@ -106,7 +118,8 @@ internal class Program
             WriteLine("2. Edit Test");
             WriteLine("3. Delete Test");
             WriteLine("4. View Results");
-            WriteLine("5. Logout");
+            WriteLine("5. Create admin account");
+            WriteLine("6. Logout");
             Write("Choose an option: ");
             string choice = ReadLine();
 
@@ -129,6 +142,9 @@ internal class Program
                     ViewResults(context, admin);
                     break;
                 case "5":
+                    Register(context, true);
+                    break;
+                case "6":
                     exit = true;
                     break;
                 default:
@@ -196,7 +212,9 @@ internal class Program
 
     static void EditTest(TestingDbContext context, int testId)
     {
-        var test = context.Tests.Include(t => t.Questions).ThenInclude(q => q.Options).SingleOrDefault(t => t.TestId == testId);
+        var test = context.Tests.Include(t => t.Questions)
+                                .ThenInclude(q => q.Options)
+                                .SingleOrDefault(t => t.TestId == testId);
 
         if (test == null)
         {
@@ -392,16 +410,18 @@ internal class Program
             if (question.Type == QuestionType.SingleChoice)
             {
                 Write("Enter the number of the correct option: ");
-                answers.Add(int.Parse(ReadLine()) - 1);
+                answers.Add(int.Parse(ReadLine()));
             }
             else if (question.Type == QuestionType.MultipleChoice)
             {
                 Write("Enter the numbers of the correct options separated by commas: ");
-                answers = ReadLine().Split(',').Select(s => int.Parse(s.Trim()) - 1).ToList();
+                answers = ReadLine().Split(',').Select(s => int.Parse(s.Trim())).ToList();
             }
 
             userAnswers.Add(question.QuestionId, answers);
         }
+
+        List<Answer> userAnswList = new();
 
         foreach (var answer in userAnswers)
         {
@@ -412,27 +432,26 @@ internal class Program
                     QuestionId = answer.Key,
                     AnswerId = optionId
                 };
-                context.Answers.Add(answerRecord);
+                userAnswList.Add(answerRecord);
             }
         }
 
         testSession.EndTime = DateTime.Now;
         context.SaveChanges();
 
-        CalculateScore(context, testSession);
+        CalculateScore(context, /*ref*/ testSession, userAnswList);
 
         WriteLine("Test completed!");
         ReadLine();
     }
 
-    static void CalculateScore(TestingDbContext context, TestSession testSession)
+    static void CalculateScore(TestingDbContext context, /*ref*/ TestSession testSession, List<Answer> userAnswers)
     {
         int totalScore = 0;
         foreach (var question in testSession.Questions)
         {
             var correctOptions = question.Options.Where(o => o.IsCorrect).Select(o => o.AnswerId).ToList();
-            var userOptions = context.Answers.Where(a => a.QuestionId == question.QuestionId && a.AnswerId == question.QuestionId).Select(a => a.AnswerId).ToList();
-
+            var userOptions = userAnswers.Select(o => o.AnswerId).ToList();
             if (correctOptions.Count == userOptions.Count && !correctOptions.Except(userOptions).Any())
             {
                 totalScore += question.Weight;
@@ -446,7 +465,12 @@ internal class Program
     static void ViewResults(TestingDbContext context, User user)
     {
         Clear();
-        var sessions = context.TestSessions.Include(ts => ts.Test).Where(ts => ts.UserId == user.UserId && ts.IsCompleted).ToList();
+        //var sessions = context.TestSessions.Include(ts => ts.Test).Where(ts => ts.UserId == user.UserId && ts.IsCompleted).ToList();
+        List<TestSession> sessions = context.TestSessions
+                        .Include(ts => ts.Test)
+                        .Where(ts => ts.UserId == user.UserId)
+                        //.Where(ts => Convert.ToBoolean(ts.IsCompleted) == true)
+                        .ToList();
         if (!sessions.Any())
         {
             WriteLine("No completed test sessions found.");
@@ -454,7 +478,8 @@ internal class Program
             return;
         }
 
-        WriteLine("Completed Test Sessions:");
+        //WriteLine("Completed Test Sessions:");
+        WriteLine("Test Sessions:");
         foreach (var session in sessions)
         {
             WriteLine($"Test: {session.Test.Name}, Score: {session.Score}, Completed: {session.EndTime}");
