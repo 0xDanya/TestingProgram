@@ -123,4 +123,10 @@ namespace TestingProgram
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }
+
+    public record Index_Answer
+    {
+        public int index { get; set; }
+        public Answer answer { get; set; }
+    }
 }

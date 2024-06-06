@@ -80,28 +80,28 @@ internal class Program
     {
         Clear();
 
-        //WriteLine("Login");
-        //Write("Username: ");
-        //string username = ReadLine();
-        //Write("Password: ");
-        //string password = ReadLine();
+        WriteLine("Login");
+        Write("Username: ");
+        string username = ReadLine();
+        Write("Password: ");
+        string password = ReadLine();
 
-        //var user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
-        //if (user == null)
-        //{
-        //    WriteLine("Invalid username or password.");
-        //    ReadLine();
-        //    return;
-        //}
+        var user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
+        if (user == null)
+        {
+            WriteLine("Invalid username or password.");
+            ReadLine();
+            return;
+        }
 
-        //if (user.IsAdmin)
-        //{
-        //    AdminMenu(context, user);
-        //}
-        //else
-        //{
-        //    UserMenu(context, user);
-        //}
+        if (user.IsAdmin)
+        {
+            AdminMenu(context, user);
+        }
+        else
+        {
+            UserMenu(context, user);
+        }
         var user = context.Users.SingleOrDefault(u => u.Username == "Junior" && u.Password == "12345");
         UserMenu(context, user);
     }
@@ -396,6 +396,7 @@ internal class Program
         context.SaveChanges();
 
         var userAnswers = new Dictionary<int, List<int>>();
+        var displayedAnswers = new List<Index_Answer>();
 
         foreach (var question in selectedTest.Questions)
         {
@@ -404,6 +405,17 @@ internal class Program
             for (int i = 0; i < question.Options.Count; i++)
             {
                 WriteLine($"{i + 1}. {question.Options[i].Text}");
+
+                displayedAnswers.Add(new Index_Answer
+                {
+                    index = i + 1,
+                    answer = new Answer
+                    {
+                        Text = question.Options[i].Text,
+                        QuestionId = question.QuestionId,
+                        Question = question
+                    }
+                });
             }
 
             var answers = new List<int>();
@@ -430,8 +442,13 @@ internal class Program
                 var answerRecord = new Answer
                 {
                     QuestionId = answer.Key,
-                    AnswerId = optionId
+                    AnswerId = optionId,
                 };
+                answerRecord.Text = displayedAnswers
+                                .Where(v => v.answer.QuestionId == answer.Key)
+                                .Where(v => v.index == optionId)
+                                .Select(v => v.answer.Text)
+                                .First();
                 userAnswList.Add(answerRecord);
             }
         }
@@ -439,23 +456,32 @@ internal class Program
         testSession.EndTime = DateTime.Now;
         context.SaveChanges();
 
-        CalculateScore(context, /*ref*/ testSession, userAnswList);
+        CalculateScore(context, ref testSession, userAnswList);
 
         WriteLine("Test completed!");
         ReadLine();
     }
 
-    static void CalculateScore(TestingDbContext context, /*ref*/ TestSession testSession, List<Answer> userAnswers)
+    static void CalculateScore(TestingDbContext context, ref TestSession testSession, List<Answer> userAnswers)
     {
         int totalScore = 0;
         foreach (var question in testSession.Questions)
         {
-            var correctOptions = question.Options.Where(o => o.IsCorrect).Select(o => o.AnswerId).ToList();
-            var userOptions = userAnswers.Select(o => o.AnswerId).ToList();
-            if (correctOptions.Count == userOptions.Count && !correctOptions.Except(userOptions).Any())
+            var correctOptions = question.Options.Where(o => o.IsCorrect).Where(o => o.QuestionId == question.QuestionId).ToList();
+            var userOptions = userAnswers.Where(u => u.QuestionId == question.QuestionId).ToList();
+            //if (correctOptions.Count == userOptions.Count && !correctOptions.Except(userOptions).Any())
+            //{
+            //    totalScore += question.Weight;
+            //}
+            int scoredInQuestion = 0;
+            foreach(var option in correctOptions)
             {
-                totalScore += question.Weight;
+                var userOption = userOptions.SingleOrDefault(uo => uo.Text == option.Text);
+                if (userOption != null)
+                    scoredInQuestion++;
             }
+            if (scoredInQuestion == correctOptions.Count)
+                totalScore += question.Weight;
         }
 
         testSession.Score = totalScore;
@@ -482,7 +508,10 @@ internal class Program
         WriteLine("Test Sessions:");
         foreach (var session in sessions)
         {
-            WriteLine($"Test: {session.Test.Name}, Score: {session.Score}, Completed: {session.EndTime}");
+            if (session.EndTime != null)
+                WriteLine($"Test: {session.Test.Name}, Score: {session.Score}, Completed: {session.EndTime}");
+            else
+                WriteLine($"Test: {session.Test.Name}, Score (right now): {session.Score}");
         }
 
         ReadLine();
