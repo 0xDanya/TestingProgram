@@ -4,9 +4,10 @@ using static System.Console;
 
 internal class Program
 {
+    static User? user = new User();
     private static void Main(string[] args)
     {
-
+        
         using (var context = new TestingDbContext())
         {
             bool exit = false;
@@ -59,7 +60,7 @@ internal class Program
             return;
         }
 
-        var user = new User
+        user = new User
         {
             Username = username,
             Password = password,
@@ -86,7 +87,7 @@ internal class Program
         Write("Password: ");
         string password = ReadLine();
 
-        var user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
+        user = context.Users.SingleOrDefault(u => u.Username == username && u.Password == password);
         if (user == null)
         {
             WriteLine("Invalid username or password.");
@@ -102,7 +103,6 @@ internal class Program
         {
             UserMenu(context, user);
         }
-        var user = context.Users.SingleOrDefault(u => u.Username == "Junior" && u.Password == "12345");
         UserMenu(context, user);
     }
 
@@ -200,7 +200,8 @@ internal class Program
             AuthorId = admin.UserId,
             CreationDate = DateTime.Now,
             IsPublished = false,
-            Questions = new List<Question>()
+            Questions = new List<Question>(),
+            Author = user
         };
 
         context.Tests.Add(test);
@@ -363,7 +364,10 @@ internal class Program
         WriteLine("Available Tests:");
         foreach (var test in tests)
         {
-            WriteLine($"{test.TestId}. {test.Name}");
+            //User testAuthor = context.Users.Where(u => u.UserId == test.AuthorId).First();
+
+            //WriteLine($"{test.TestId}. {test.Name} by {testAuthor.Username}");
+            WriteLine($"{test.TestId}. {test.Name} by {test.Author.Username}");
         }
 
         Write("Enter test ID to take: ");
