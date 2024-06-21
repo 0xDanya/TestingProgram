@@ -367,7 +367,9 @@ internal class Program
             //User testAuthor = context.Users.Where(u => u.UserId == test.AuthorId).First();
 
             //WriteLine($"{test.TestId}. {test.Name} by {testAuthor.Username}");
-            WriteLine($"{test.TestId}. {test.Name} by {test.Author.Username}");
+
+            string testAuthor = test.Author != null ? test.Author.Username : "Unknown user";
+            WriteLine($"{test.TestId}. {test.Name} by {testAuthor}");
         }
 
         Write("Enter test ID to take: ");
@@ -393,7 +395,7 @@ internal class Program
             UserId = user.UserId,
             TestId = testId,
             StartTime = DateTime.Now,
-            Questions = selectedTest.Questions.ToList()
+            Questions = selectedTest.Questions
         };
 
         context.TestSessions.Add(testSession);
@@ -473,10 +475,7 @@ internal class Program
         {
             var correctOptions = question.Options.Where(o => o.IsCorrect).Where(o => o.QuestionId == question.QuestionId).ToList();
             var userOptions = userAnswers.Where(u => u.QuestionId == question.QuestionId).ToList();
-            //if (correctOptions.Count == userOptions.Count && !correctOptions.Except(userOptions).Any())
-            //{
-            //    totalScore += question.Weight;
-            //}
+            
             int scoredInQuestion = 0;
             foreach(var option in correctOptions)
             {
@@ -495,11 +494,9 @@ internal class Program
     static void ViewResults(TestingDbContext context, User user)
     {
         Clear();
-        //var sessions = context.TestSessions.Include(ts => ts.Test).Where(ts => ts.UserId == user.UserId && ts.IsCompleted).ToList();
         List<TestSession> sessions = context.TestSessions
                         .Include(ts => ts.Test)
                         .Where(ts => ts.UserId == user.UserId)
-                        //.Where(ts => Convert.ToBoolean(ts.IsCompleted) == true)
                         .ToList();
         if (!sessions.Any())
         {
@@ -508,12 +505,13 @@ internal class Program
             return;
         }
 
-        //WriteLine("Completed Test Sessions:");
+       
         WriteLine("Test Sessions:");
         foreach (var session in sessions)
         {
+            int allTestScore = session.Test.Questions.Select(x => x.Weight).ToList().Sum();
             if (session.EndTime != null)
-                WriteLine($"Test: {session.Test.Name}, Score: {session.Score}, Completed: {session.EndTime}");
+                WriteLine($"Test: {session.Test.Name}, Score: {session.Score}/{allTestScore}, Completed: {session.EndTime}");
             else
                 WriteLine($"Test: {session.Test.Name}, Score (right now): {session.Score}");
         }
